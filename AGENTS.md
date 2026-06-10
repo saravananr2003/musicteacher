@@ -43,6 +43,7 @@ No linter, formatter, or test suite is configured in this repo. Smoke-test by im
 
 ### Gotchas
 
+- **Upload sources**: Local file upload and Google Drive share links (`Anyone with the link` required for Drive imports).
 - **API key**: Upload + form submission works without a key, but analysis shows: "Add an OpenAI API key to analyze the recording."
 - **Branch**: Do not assume `app.py` exists on `main`.
 - **Secrets file**: `.streamlit/secrets.toml` is gitignored; create it locally if you prefer secrets over env vars.

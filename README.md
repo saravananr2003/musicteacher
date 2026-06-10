@@ -7,7 +7,7 @@ practice recommendations.
 
 ## Features
 
-- Streamlit web UI for uploading vocal recordings.
+- Streamlit web UI for uploading vocal recordings from your computer or Google Drive.
 - Carnatic focus areas:
   - Varisai
   - Shruthi
@@ -63,7 +63,8 @@ Then open the local Streamlit URL shown in the terminal.
 
 ## Usage tips
 
-- Upload short clips for focused feedback.
+- Upload short clips for focused feedback from your computer or a Google Drive share link.
+- For Google Drive, share the file with **Anyone with the link** before loading it in the app.
 - Mention the intended raga, tala, shruthi, and exercise when possible.
 - Select only the focus areas you want reviewed for a clearer response.
 

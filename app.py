@@ -8,6 +8,12 @@ from typing import Any
 import streamlit as st
 from openai import OpenAI
 
+from carnatic_teacher.audio_source import (
+    SUPPORTED_AUDIO_TYPES,
+    AudioRecording,
+    download_google_drive_audio,
+    is_supported_audio,
+)
 from carnatic_teacher.openai_analysis import (
     FOCUS_AREA_DESCRIPTIONS,
     PracticeContext,
@@ -18,7 +24,7 @@ from carnatic_teacher.openai_analysis import (
 
 LEARNER_LEVELS = ["Beginner", "Intermediate", "Advanced"]
 DEFAULT_FOCUS_AREAS = ["Varisai", "Shruthi", "Thalam"]
-SUPPORTED_AUDIO_TYPES = ["flac", "m4a", "mp3", "mp4", "mpeg", "mpga", "ogg", "wav", "webm"]
+UPLOAD_SOURCES = ("This computer", "Google Drive")
 
 
 def main() -> None:
@@ -37,14 +43,7 @@ def main() -> None:
     _render_how_it_works()
 
     api_key = _get_api_key()
-    uploaded_audio = st.file_uploader(
-        "Upload your recorded voice practice",
-        type=SUPPORTED_AUDIO_TYPES,
-        help="Short practice clips work best for focused feedback.",
-    )
-
-    if uploaded_audio:
-        st.audio(uploaded_audio.getvalue())
+    audio_recording = _render_audio_upload()
 
     with st.form("practice_context"):
         st.subheader("Practice details")
@@ -76,7 +75,7 @@ def main() -> None:
     if analyze_clicked:
         _run_analysis(
             api_key=api_key,
-            uploaded_audio=uploaded_audio,
+            audio_recording=audio_recording,
             context=PracticeContext(
                 focus_areas=focus_areas,
                 raga=raga,
@@ -87,6 +86,52 @@ def main() -> None:
                 notes=notes,
             ),
         )
+
+
+def _render_audio_upload() -> AudioRecording | None:
+    st.subheader("Upload recording")
+    upload_source = st.radio(
+        "Choose upload source",
+        options=UPLOAD_SOURCES,
+        horizontal=True,
+    )
+
+    if upload_source == UPLOAD_SOURCES[0]:
+        st.session_state.pop("drive_audio_recording", None)
+        uploaded_audio = st.file_uploader(
+            "Upload your recorded voice practice",
+            type=SUPPORTED_AUDIO_TYPES,
+            help="Short practice clips work best for focused feedback.",
+        )
+        if uploaded_audio is None:
+            return None
+        audio_recording = AudioRecording(name=uploaded_audio.name, data=uploaded_audio.getvalue())
+        st.audio(audio_recording.data)
+        return audio_recording
+
+    drive_link = st.text_input(
+        "Google Drive file link",
+        placeholder="https://drive.google.com/file/d/.../view?usp=sharing",
+        help="Share the recording with 'Anyone with the link' before loading it here.",
+    )
+    load_clicked = st.button("Load from Google Drive", type="secondary")
+
+    if load_clicked:
+        if not drive_link.strip():
+            st.error("Paste a Google Drive share link first.")
+        else:
+            try:
+                with st.spinner("Downloading audio from Google Drive..."):
+                    st.session_state["drive_audio_recording"] = download_google_drive_audio(drive_link)
+                st.success("Recording loaded from Google Drive.")
+            except Exception as exc:
+                st.error(str(exc))
+
+    audio_recording = st.session_state.get("drive_audio_recording")
+    if audio_recording is not None:
+        st.audio(audio_recording.data)
+        st.caption(f"Loaded: {audio_recording.name}")
+    return audio_recording
 
 
 def _render_how_it_works() -> None:
@@ -124,15 +169,22 @@ def _get_api_key() -> str:
 
 def _run_analysis(
     api_key: str,
-    uploaded_audio: Any,
+    audio_recording: AudioRecording | None,
     context: PracticeContext,
 ) -> None:
     if not api_key:
         st.error("Add an OpenAI API key to analyze the recording.")
         return
 
-    if uploaded_audio is None:
-        st.error("Upload an audio recording before starting analysis.")
+    if audio_recording is None:
+        st.error("Upload or load an audio recording before starting analysis.")
+        return
+
+    if not is_supported_audio(audio_recording.name):
+        st.error(
+            "The selected recording must use a supported audio type: "
+            + ", ".join(SUPPORTED_AUDIO_TYPES)
+        )
         return
 
     if not context.focus_areas:
@@ -140,15 +192,14 @@ def _run_analysis(
         return
 
     client = OpenAI(api_key=api_key)
-    audio_bytes = uploaded_audio.getvalue()
 
     try:
         with st.status("Transcribing and analyzing your recording...", expanded=True) as status:
             st.write("Transcribing the uploaded audio with timestamps.")
             transcription = transcribe_audio(
                 client=client,
-                audio_bytes=audio_bytes,
-                filename=uploaded_audio.name,
+                audio_bytes=audio_recording.data,
+                filename=audio_recording.name,
             )
 
             st.write("Generating Carnatic music feedback.")
